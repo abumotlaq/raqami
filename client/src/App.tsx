@@ -1,13 +1,14 @@
-
+import { AppRoutes } from './routes/AppRoutes'
+import { AuthProvider } from './context/AuthContext'
+import { CartProvider } from './context/CartContext'
 
 function App() {
-
-
   return (
-    <>
-    <p>Lkk</p>
-      
-    </>
+    <AuthProvider>
+      <CartProvider>
+        <AppRoutes />
+      </CartProvider>
+    </AuthProvider>
   )
 }
 
