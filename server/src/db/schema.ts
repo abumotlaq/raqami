@@ -8,6 +8,7 @@ import {
   serial,
   text,
   timestamp,
+  unique,
 } from "drizzle-orm/pg-core";
 
 const createdAt = () => timestamp("created_at", { withTimezone: true }).notNull().defaultNow();
@@ -22,6 +23,8 @@ export const users = pgTable("users", {
   email: text("email").notNull().unique(),
   passwordHash: text("password_hash").notNull(),
   role: userRole("role").notNull().default("customer"),
+  // Raised on logout; tokens issued with an older version stop working.
+  tokenVersion: integer("token_version").notNull().default(0),
   createdAt: createdAt(),
 });
 
@@ -91,25 +94,23 @@ export const orderItems = pgTable(
 );
 
 // One row = this user has the right to download this product.
+// Created only when an order is paid; orderId is the order that granted it.
 export const downloads = pgTable(
   "downloads",
   {
+    id: serial("id").primaryKey(),
     userId: integer("user_id")
       .notNull()
       .references(() => users.id, { onDelete: "cascade" }),
     productId: integer("product_id")
       .notNull()
       .references(() => products.id),
-    createdAt: createdAt(),
+    orderId: integer("order_id")
+      .notNull()
+      .references(() => orders.id),
   },
-  (t) => [primaryKey({ columns: [t.userId, t.productId] })],
+  (t) => [unique().on(t.userId, t.productId)],
 );
-
-// Tokens invalidated by logout, kept until they would have expired anyway.
-export const revokedTokens = pgTable("revoked_tokens", {
-  jti: text("jti").primaryKey(),
-  expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
-});
 
 export type User = typeof users.$inferSelect;
 export type Product = typeof products.$inferSelect;

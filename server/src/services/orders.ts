@@ -60,7 +60,7 @@ export async function settleOrder(orderId: number, status: "paid" | "failed") {
 
     await tx
       .insert(downloads)
-      .values(productIds.map((productId) => ({ userId: order.userId, productId })))
+      .values(productIds.map((productId) => ({ userId: order.userId, productId, orderId })))
       .onConflictDoNothing();
 
     const userCart = tx.select({ id: carts.id }).from(carts).where(eq(carts.userId, order.userId));

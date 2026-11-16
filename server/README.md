@@ -19,6 +19,12 @@ Accounts created through `/auth/register` are always customers.
 
 For the frontend, set `VITE_API_URL=http://localhost:3000/api/v1` in `client/.env`.
 
+## API documentation (Swagger)
+
+With the server running, open <http://localhost:3000/api/docs> to read and try every endpoint.
+Use **Authorize** with a token from `/auth/login` to call the protected ones.
+The raw OpenAPI document is at `/api/docs.json`, and its source is `src/docs/openapi.ts`.
+
 ## Layout
 
 | Path | What it holds |
@@ -29,6 +35,7 @@ For the frontend, set `VITE_API_URL=http://localhost:3000/api/v1` in `client/.en
 | `src/payment/sandbox.ts` | Fake payment gateway (success, failure, pending) |
 | `src/middleware/` | `requireAuth`, `requireAdmin`, error handler |
 | `src/lib/` | Error codes, validation, pagination, response serializers, tokens |
+| `src/docs/openapi.ts` | OpenAPI description shown by Swagger UI |
 | `src/db/schema.ts` | Tables: users, products, carts, cart_items, orders, order_items, downloads |
 | `storage/` | Private product files. Not served statically, not in git |
 
@@ -43,6 +50,7 @@ Lists answer `{ data, meta }`; single objects are returned as-is, without a wrap
 | --- | --- |
 | `POST /auth/register` | `{ name, email, password }` — password is 8 characters or more |
 | `POST /auth/login` | `{ email, password }` |
+| `POST /auth/logout` | none — invalidates every token of this user issued before the logout |
 | `POST /cart/items` | `{ productId }` |
 | `POST /orders` | none (optional `{ sandboxOutcome }`, see below) |
 | `POST /admin/products` | `{ title, category, price, description, imageUrl, isActive? }` |
@@ -109,7 +117,7 @@ To show the other cases, send `sandboxOutcome` in the body:
 
 ## Download security
 
-1. `GET /library/{productId}/download` checks the `downloads` table for this user and product. No row means `403 PRODUCT_NOT_PURCHASED`.
+1. `GET /library/{productId}/download` checks the `downloads` table for this user and product. No row means `403 PRODUCT_NOT_PURCHASED`. A row is created only when an order is paid, and points to that order.
 2. It answers a link signed with HMAC-SHA256 over the user, product and expiry time, valid for five minutes.
 3. Opening the link checks the signature, the expiry and the purchase again, then streams the file.
 

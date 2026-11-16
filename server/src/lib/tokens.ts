@@ -1,4 +1,4 @@
-import { createHmac, randomUUID, timingSafeEqual } from "node:crypto";
+import { createHmac, timingSafeEqual } from "node:crypto";
 import jwt from "jsonwebtoken";
 import { env } from "../env.js";
 
@@ -6,15 +6,15 @@ import { env } from "../env.js";
 
 export interface AuthToken {
   userId: number;
-  jti: string;
-  expiresAt: Date;
+  // The user's tokenVersion when the token was issued. Logout raises the user's
+  // version, so every token issued before it stops being accepted.
+  version: number;
 }
 
-export function signAuthToken(userId: number): string {
-  return jwt.sign({}, env.jwtSecret, {
+export function signAuthToken(user: { id: number; tokenVersion: number }): string {
+  return jwt.sign({ ver: user.tokenVersion }, env.jwtSecret, {
     algorithm: "HS256",
-    subject: String(userId),
-    jwtid: randomUUID(),
+    subject: String(user.id),
     expiresIn: env.tokenTtlSeconds,
   });
 }
@@ -22,12 +22,8 @@ export function signAuthToken(userId: number): string {
 export function verifyAuthToken(token: string): AuthToken | null {
   try {
     const payload = jwt.verify(token, env.jwtSecret, { algorithms: ["HS256"] });
-    if (typeof payload === "string" || !payload.sub || !payload.jti || !payload.exp) return null;
-    return {
-      userId: Number(payload.sub),
-      jti: payload.jti,
-      expiresAt: new Date(payload.exp * 1000),
-    };
+    if (typeof payload === "string" || !payload.sub || typeof payload.ver !== "number") return null;
+    return { userId: Number(payload.sub), version: payload.ver };
   } catch {
     return null;
   }

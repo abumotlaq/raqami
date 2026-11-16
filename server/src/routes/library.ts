@@ -3,7 +3,7 @@ import path from "node:path";
 import { and, desc, eq } from "drizzle-orm";
 import { Router } from "express";
 import { db } from "../db/index.js";
-import { downloads, products } from "../db/schema.js";
+import { downloads, orders, products } from "../db/schema.js";
 import { env } from "../env.js";
 import { errors } from "../lib/errors.js";
 import { toProduct } from "../lib/serialize.js";
@@ -29,11 +29,12 @@ libraryRouter.use(requireAuth);
 // Products hidden from the store after purchase stay in the library.
 libraryRouter.get("/", async (req, res) => {
   const rows = await db
-    .select({ product: products, purchasedAt: downloads.createdAt })
+    .select({ product: products, purchasedAt: orders.createdAt })
     .from(downloads)
     .innerJoin(products, eq(products.id, downloads.productId))
+    .innerJoin(orders, eq(orders.id, downloads.orderId))
     .where(eq(downloads.userId, authOf(req).user.id))
-    .orderBy(desc(downloads.createdAt), desc(products.id));
+    .orderBy(desc(downloads.id));
 
   res.json({
     data: rows.map((row) => ({

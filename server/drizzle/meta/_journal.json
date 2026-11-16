@@ -15,6 +15,13 @@
       "when": 1794820835317,
       "tag": "0001_classy_vengeance",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1794822531481,
+      "tag": "0002_white_shiva",
+      "breakpoints": true
     }
   ]
 }

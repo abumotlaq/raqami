@@ -1,7 +1,9 @@
 import cors from "cors";
 import { sql } from "drizzle-orm";
 import express, { Router } from "express";
+import swaggerUi from "swagger-ui-express";
 import { db } from "./db/index.js";
+import { openApiDocument } from "./docs/openapi.js";
 import { env } from "./env.js";
 import { errorHandler, notFound } from "./middleware/error.js";
 import { adminRouter } from "./routes/admin.js";
@@ -32,5 +34,12 @@ api.use("/downloads", downloadsRouter);
 api.use("/admin", adminRouter);
 
 app.use("/api/v1", api);
+
+// Interactive API documentation (Swagger UI) and the raw OpenAPI document.
+app.get("/api/docs.json", (_req, res) => {
+  res.json(openApiDocument);
+});
+app.use("/api/docs", swaggerUi.serve, swaggerUi.setup(openApiDocument, { customSiteTitle: "Raqami API" }));
+
 app.use(notFound);
 app.use(errorHandler);

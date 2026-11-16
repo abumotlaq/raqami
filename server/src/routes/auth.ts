@@ -1,9 +1,9 @@
 import bcrypt from "bcryptjs";
-import { eq, lt } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import { Router } from "express";
 import { z } from "zod";
 import { db } from "../db/index.js";
-import { revokedTokens, users } from "../db/schema.js";
+import { users } from "../db/schema.js";
 import { errors } from "../lib/errors.js";
 import { toUser } from "../lib/serialize.js";
 import { signAuthToken } from "../lib/tokens.js";
@@ -55,7 +55,7 @@ authRouter.post("/register", async (req, res) => {
     .returning();
   if (!user) throw errors.emailTaken();
 
-  res.status(201).json({ user: toUser(user), token: signAuthToken(user.id) });
+  res.status(201).json({ user: toUser(user), token: signAuthToken(user) });
 });
 
 // POST /auth/login — sign in (UC-05).
@@ -66,18 +66,16 @@ authRouter.post("/login", async (req, res) => {
   const passwordOk = await bcrypt.compare(body.password, user?.passwordHash ?? dummyHash);
   if (!user || !passwordOk) throw errors.invalidCredentials();
 
-  res.json({ user: toUser(user), token: signAuthToken(user.id) });
+  res.json({ user: toUser(user), token: signAuthToken(user) });
 });
 
-// POST /auth/logout — invalidate the current token.
+// POST /auth/logout — invalidate the token.
+// Raising tokenVersion invalidates every token of this user, on all devices.
 authRouter.post("/logout", requireAuth, async (req, res) => {
-  const { token } = authOf(req);
   await db
-    .insert(revokedTokens)
-    .values({ jti: token.jti, expiresAt: token.expiresAt })
-    .onConflictDoNothing();
-  // Tokens that have expired no longer need to be remembered.
-  await db.delete(revokedTokens).where(lt(revokedTokens.expiresAt, new Date()));
+    .update(users)
+    .set({ tokenVersion: sql`${users.tokenVersion} + 1` })
+    .where(eq(users.id, authOf(req).user.id));
 
   res.status(204).end();
 });
