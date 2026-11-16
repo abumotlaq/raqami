@@ -12,6 +12,7 @@ FROM base AS runtime
 ENV NODE_ENV=production
 RUN pnpm install --frozen-lockfile --prod
 COPY --from=build /app/dist ./dist
+RUN mkdir storage && chown node:node storage
 USER node
 EXPOSE 3000
 CMD ["node", "dist/index.js"]

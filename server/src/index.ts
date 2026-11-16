@@ -1,18 +1,14 @@
-import express from "express";
-import { sql } from "drizzle-orm";
-import { db, pool } from "./db/index.js";
+import fs from "node:fs";
+import { app } from "./app.js";
+import { pool } from "./db/index.js";
 import { env } from "./env.js";
+import { resumePendingOrders } from "./services/orders.js";
 
-const app = express();
-app.use(express.json());
-
-app.get("/health", async (_req, res) => {
-  await db.execute(sql`select 1`);
-  res.json({ status: "ok" });
-});
+fs.mkdirSync(env.storageDir, { recursive: true });
 
 const server = app.listen(env.port, () => {
   console.log(`Server listening on http://localhost:${env.port}`);
+  resumePendingOrders().catch((err) => console.error("Could not resume pending orders", err));
 });
 
 const shutdown = () => {
