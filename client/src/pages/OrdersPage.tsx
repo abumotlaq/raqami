@@ -1,4 +1,5 @@
 import { useCallback, useState } from 'react'
+import { Link } from 'react-router-dom'
 import { EmptyState } from '../components/ui/EmptyState'
 import { ErrorState } from '../components/ui/ErrorState'
 import { Pagination } from '../components/ui/Pagination'
@@ -35,6 +36,7 @@ export function OrdersPage() {
       <main className="space-y-md p-md">
         <h1 className="text-heading">Orders</h1>
         <EmptyState title="No orders are available." />
+        <Link to="/">Browse products</Link>
         {data ? (
           <Pagination
             meta={data.meta}

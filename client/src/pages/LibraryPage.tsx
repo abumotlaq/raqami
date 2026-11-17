@@ -1,4 +1,5 @@
 import { useCallback } from 'react'
+import { Link } from 'react-router-dom'
 import { DownloadButton } from '../components/library/DownloadButton'
 import { EmptyState } from '../components/ui/EmptyState'
 import { ErrorState } from '../components/ui/ErrorState'
@@ -30,6 +31,7 @@ export function LibraryPage() {
       <main className="space-y-md p-md">
         <h1 className="text-heading">Library</h1>
         <EmptyState title="Your library is empty." />
+        <Link to="/">Browse products</Link>
       </main>
     )
   }

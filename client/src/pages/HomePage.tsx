@@ -61,7 +61,14 @@ export function HomePage() {
         />
       ) : null}
       {status === 'success' && data?.data.length === 0 ? (
-        <EmptyState title="No products match these filters." />
+        <EmptyState
+          title="No products match these filters."
+          actionLabel="Clear filters"
+          onAction={() => {
+            updateSearch('')
+            updateCategory('')
+          }}
+        />
       ) : null}
       {status === 'success' && data && data.data.length > 0 ? (
         <>

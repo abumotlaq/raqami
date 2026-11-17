@@ -1,4 +1,4 @@
-import { Link, useParams } from 'react-router-dom'
+import { Link, useNavigate, useParams } from 'react-router-dom'
 import { EmptyState } from '../components/ui/EmptyState'
 import { ErrorState } from '../components/ui/ErrorState'
 import { Spinner } from '../components/ui/Spinner'
@@ -7,6 +7,7 @@ import { useOrderResult } from '../hooks/useOrderResult'
 
 export function CheckoutResultPage() {
   const { orderId = '' } = useParams()
+  const navigate = useNavigate()
   const { token } = useAuth()
   const { data, status, error, isPolling, retry } = useOrderResult(
     orderId,
@@ -30,7 +31,13 @@ export function CheckoutResultPage() {
     )
   }
   if (!data) {
-    return <EmptyState title="This order is unavailable." />
+    return (
+      <EmptyState
+        title="This order is unavailable."
+        actionLabel="View orders"
+        onAction={() => navigate('/orders')}
+      />
+    )
   }
   if (data.status === 'pending') {
     return (

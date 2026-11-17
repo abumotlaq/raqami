@@ -54,7 +54,13 @@ export function ProductDetailsPage() {
     )
   }
   if (!data) {
-    return <EmptyState title="This product is unavailable." />
+    return (
+      <EmptyState
+        title="This product is unavailable."
+        actionLabel="Browse products"
+        onAction={() => navigate('/')}
+      />
+    )
   }
 
   return (
