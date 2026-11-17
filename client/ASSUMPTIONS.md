@@ -1,13 +1,13 @@
 # Assumptions
 
-- The frontend team structure described in the project prompt is the agreed structure: shared API types in `src/types/`, API calls only in `src/services/api.ts`, contexts in `src/context/`, components grouped under `src/components/`, route pages in `src/pages/`, and routing in `src/routes/`.
-- The existing Vite and Tailwind CSS v4 setup remains the frontend build baseline.
-- Initial design tokens are provisional defaults only, pending the UI/UX designer's final design.
-- The Arabic font stack uses system fonts (`Tahoma`, `Arial`, and sans-serif) and does not rely on downloading a font.
-- No `any` types have been introduced.
-- `VITE_API_URL`, when set, is expected to include the `/api/v1` base path. If it is unset, the API client uses the relative `/api/v1` path.
-- The auth token is stored under the `raqami_token` localStorage key; no other application data is stored there.
-- For a non-JSON error response, the API client uses the generic message `The server returned an unreadable error response.` The contract defines no generic error code, so the existing `VALIDATION_FAILED` code is used as a fallback and must not be interpreted as the actual cause.
-- Unspecified API response shapes remain `unknown` and are not rendered as cart or library items until the contract is confirmed.
-- Appendix A does not specify the login request body. The temporary login request sends no body so it does not invent credential field names.
-- ESLint with `typescript-eslint` is temporarily disabled for linting because `typescript-eslint@8.72.2` does not support the team's TypeScript `7.0.2`. Step 5 verification relies on `pnpm exec tsc --noEmit` and `pnpm exec vite build`. Re-enable lint when `typescript-eslint` supports TypeScript 7.1 or later; keep `eslint.config.ts` unchanged so it can be re-enabled without rewriting it.
+- `VITE_API_URL`, when configured, includes the `/api/v1` base path. When unset, requests use the relative `/api/v1` path.
+- An error response with a valid message but a code outside Appendix A is represented as `INTERNAL_ERROR`; its server-provided message and valid `errors` object are preserved. The report's error-code list is treated as exhaustive.
+- A non-JSON or otherwise unreadable error response cannot provide the server's `message` or field errors. The API client uses the generic message `The server returned an unreadable error response.`, code `INTERNAL_ERROR`, and `errors: null`.
+- The auth token is the only application value stored in localStorage, under the existing `raqami_token` key.
+- Product category filtering uses a free-text value because the contract exposes an exact category filter but does not define a categories endpoint or a canonical category list.
+- Product and order lists start with the report's `per_page=12`; page size can be changed within the backend's accepted 1–100 range.
+- Successful registration returns the same `{ user, token }` response as login, so registration stores the returned token and establishes the new session.
+- A `401 UNAUTHENTICATED` response clears the current session and redirects to login while preserving the protected route as the return destination. Other 401 codes, such as `INVALID_CREDENTIALS`, do not clear a session.
+- File upload uses browser-managed `FormData` content-type boundaries; the client does not set the multipart `Content-Type` header manually.
+- UI styling uses only the existing neutral tokens in `src/index.css`; this is functional placeholder styling, not a finalized design.
+- No mock, seed, or sample data is used under `client/src`. The backend's separate development seeder is outside this client-only implementation.

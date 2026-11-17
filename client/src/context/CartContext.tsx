@@ -12,19 +12,20 @@ import {
   getErrorMessage,
   removeCartItem as removeCartItemRequest,
 } from '../services/api'
+import type { Cart } from '../types/api'
 import { useAuth } from './AuthContext'
 
 type CartStatus = 'idle' | 'loading' | 'ready' | 'error'
 
 interface CartState {
-  response: unknown | null
+  cart: Cart | null
   status: CartStatus
   error: string | null
 }
 
 type CartAction =
   | { type: 'loading' }
-  | { type: 'loaded'; response: unknown }
+  | { type: 'loaded'; cart: Cart }
   | { type: 'failed'; error: string }
   | { type: 'reset' }
 
@@ -36,7 +37,7 @@ interface CartContextValue {
 }
 
 const initialState: CartState = {
-  response: null,
+  cart: null,
   status: 'idle',
   error: null,
 }
@@ -44,11 +45,11 @@ const initialState: CartState = {
 function cartReducer(_state: CartState, action: CartAction): CartState {
   switch (action.type) {
     case 'loading':
-      return { response: null, status: 'loading', error: null }
+      return { cart: null, status: 'loading', error: null }
     case 'loaded':
-      return { response: action.response, status: 'ready', error: null }
+      return { cart: action.cart, status: 'ready', error: null }
     case 'failed':
-      return { response: null, status: 'error', error: action.error }
+      return { cart: null, status: 'error', error: action.error }
     case 'reset':
       return initialState
   }
@@ -67,10 +68,11 @@ export function CartProvider({ children }: CartProviderProps) {
   const refreshCart = useCallback(async () => {
     dispatch({ type: 'loading' })
     try {
-      const response = await getCart(token)
-      dispatch({ type: 'loaded', response })
+      const cart = await getCart(token)
+      dispatch({ type: 'loaded', cart })
     } catch (error) {
       dispatch({ type: 'failed', error: getErrorMessage(error) })
+      throw error
     }
   }, [token])
 
@@ -78,10 +80,11 @@ export function CartProvider({ children }: CartProviderProps) {
     async (productId: string) => {
       dispatch({ type: 'loading' })
       try {
-        await addCartItemRequest(productId, token)
+        await addCartItemRequest({ productId }, token)
         await refreshCart()
       } catch (error) {
         dispatch({ type: 'failed', error: getErrorMessage(error) })
+        throw error
       }
     },
     [refreshCart, token],
@@ -95,6 +98,7 @@ export function CartProvider({ children }: CartProviderProps) {
         await refreshCart()
       } catch (error) {
         dispatch({ type: 'failed', error: getErrorMessage(error) })
+        throw error
       }
     },
     [refreshCart, token],
@@ -102,7 +106,7 @@ export function CartProvider({ children }: CartProviderProps) {
 
   useEffect(() => {
     if (authStatus === 'ready' && token) {
-      void refreshCart()
+      void refreshCart().catch(() => undefined)
     } else if (authStatus === 'ready') {
       dispatch({ type: 'reset' })
     }

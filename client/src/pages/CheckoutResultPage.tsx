@@ -1,4 +1,4 @@
-import { useParams } from 'react-router-dom'
+import { Link, useParams } from 'react-router-dom'
 import { EmptyState } from '../components/ui/EmptyState'
 import { ErrorState } from '../components/ui/ErrorState'
 import { Spinner } from '../components/ui/Spinner'
@@ -34,23 +34,28 @@ export function CheckoutResultPage() {
   }
   if (data.status === 'pending') {
     return (
-      <main>
-        <h1>Order pending</h1>
+      <main className="space-y-md p-md">
+        <h1 className="text-heading">Order pending</h1>
         <p>Waiting for the order status to update.</p>
         {isPolling ? <Spinner label="Checking order status" /> : null}
-        <p>{data.id}</p>
-        <p>{data.status}</p>
+        <p>Order: {data.id}</p>
+        <p>Status: {data.status}</p>
+        <p>Total: {Number(data.total).toFixed(2)}</p>
+        <Link to="/library">Go to library</Link>
       </main>
     )
   }
 
   return (
-    <main>
-      <h1>{data.status === 'paid' ? 'Order successful' : 'Order failed'}</h1>
-      <p>{data.id}</p>
-      <p>{data.status}</p>
-      <p>{Number(data.total).toFixed(2)}</p>
+    <main className="space-y-md p-md">
+      <h1 className="text-heading">
+        {data.status === 'paid' ? 'Order successful' : 'Order failed'}
+      </h1>
+      <p>Order: {data.id}</p>
+      <p>Status: {data.status}</p>
+      <p>Total: {Number(data.total).toFixed(2)}</p>
       <time dateTime={data.createdAt}>{data.createdAt}</time>
+      <Link to="/library">Go to library</Link>
     </main>
   )
 }

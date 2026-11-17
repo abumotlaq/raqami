@@ -1,36 +1,101 @@
 import { useState, type FormEvent } from 'react'
-import { Navigate } from 'react-router-dom'
+import { Link, Navigate, useLocation } from 'react-router-dom'
+import { FieldErrors as FieldErrorsList } from '../components/ui/FieldErrors'
 import { ErrorState } from '../components/ui/ErrorState'
 import { Spinner } from '../components/ui/Spinner'
 import { useAuth } from '../context/AuthContext'
-import { getErrorMessage } from '../services/api'
+import { ApiResponseError, getErrorMessage } from '../services/api'
+import type { FieldErrors, LoginRequestBody } from '../types/api'
+
+function getReturnPath(state: unknown): string {
+  if (typeof state !== 'object' || state === null || !('from' in state)) {
+    return '/'
+  }
+  const from = state.from
+  return typeof from === 'string' && from.startsWith('/') && !from.startsWith('//')
+    ? from
+    : '/'
+}
 
 export function LoginPage() {
   const { login, status, user } = useAuth()
-  const [error, setError] = useState<string | null>(null)
+  const location = useLocation()
+  const [values, setValues] = useState<LoginRequestBody>({
+    email: '',
+    password: '',
+  })
+  const [message, setMessage] = useState<string | null>(null)
+  const [fieldErrors, setFieldErrors] = useState<FieldErrors | null>(null)
 
   if (status !== 'ready') {
     return <Spinner />
   }
   if (user) {
-    return <Navigate to="/" replace />
+    return <Navigate to={getReturnPath(location.state)} replace />
   }
 
-  function handleSubmit(event: FormEvent<HTMLFormElement>) {
+  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
-    setError(null)
-    void login().catch((requestError: unknown) => {
-      setError(getErrorMessage(requestError))
-    })
+    setMessage(null)
+    setFieldErrors(null)
+    try {
+      await login(values)
+    } catch (requestError: unknown) {
+      setMessage(getErrorMessage(requestError))
+      if (requestError instanceof ApiResponseError) {
+        setFieldErrors(requestError.errors)
+      }
+    }
   }
 
   return (
-    <main>
-      <h1>Login</h1>
-      <form onSubmit={handleSubmit}>
-        <button type="submit">Log in</button>
+    <main className="space-y-md p-md">
+      <h1 className="text-heading">Login</h1>
+      {message ? <ErrorState message={message} /> : null}
+      <form className="grid gap-md" onSubmit={handleSubmit}>
+        <label className="grid gap-xs">
+          Email
+          <input
+            autoComplete="email"
+            className="rounded-control border border-border bg-surface px-md py-sm"
+            name="email"
+            type="email"
+            required
+            value={values.email}
+            onChange={(event) =>
+              setValues((current) => ({ ...current, email: event.target.value }))
+            }
+          />
+          <FieldErrorsList messages={fieldErrors?.email} />
+        </label>
+        <label className="grid gap-xs">
+          Password
+          <input
+            autoComplete="current-password"
+            className="rounded-control border border-border bg-surface px-md py-sm"
+            name="password"
+            type="password"
+            required
+            value={values.password}
+            onChange={(event) =>
+              setValues((current) => ({
+                ...current,
+                password: event.target.value,
+              }))
+            }
+          />
+          <FieldErrorsList messages={fieldErrors?.password} />
+        </label>
+        <button
+          className="rounded-control bg-primary px-md py-sm text-primary-foreground"
+          type="submit"
+        >
+          Log in
+        </button>
       </form>
-      {error ? <ErrorState message={error} /> : null}
+      <p>
+        <Link to="/register">Create an account</Link>
+      </p>
     </main>
   )
 }

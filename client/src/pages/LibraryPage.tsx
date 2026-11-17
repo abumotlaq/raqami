@@ -1,15 +1,18 @@
 import { useCallback } from 'react'
+import { DownloadButton } from '../components/library/DownloadButton'
 import { EmptyState } from '../components/ui/EmptyState'
 import { ErrorState } from '../components/ui/ErrorState'
 import { Spinner } from '../components/ui/Spinner'
 import { useAuth } from '../context/AuthContext'
 import { useApiResource } from '../hooks/useApiResource'
 import { getLibrary } from '../services/api'
+import type { LibraryResponse } from '../types/api'
 
 export function LibraryPage() {
   const { token } = useAuth()
   const loadLibrary = useCallback(() => getLibrary(token), [token])
-  const { status, error, retry } = useApiResource(loadLibrary)
+  const { data, status, error, retry } =
+    useApiResource<LibraryResponse>(loadLibrary)
 
   if (status === 'loading') {
     return <Spinner />
@@ -22,12 +25,33 @@ export function LibraryPage() {
       />
     )
   }
+  if (!data || data.data.length === 0) {
+    return (
+      <main className="space-y-md p-md">
+        <h1 className="text-heading">Library</h1>
+        <EmptyState title="Your library is empty." />
+      </main>
+    )
+  }
 
   return (
-    <main>
-      <h1>Library</h1>
-      <p role="status">PENDING_CONTRACT: Library items cannot be displayed until the GET /library item shape is confirmed.</p>
-      <EmptyState title="Library items are unavailable until the API contract is confirmed." />
+    <main className="space-y-md p-md">
+      <h1 className="text-heading">Library</h1>
+      <ul className="grid gap-md sm:grid-cols-2">
+        {data.data.map(({ product, purchasedAt }) => (
+          <li
+            className="space-y-sm rounded-card border border-border bg-surface p-md"
+            key={product.id}
+          >
+            <h2 className="text-subheading">{product.title}</h2>
+            <p>
+              Purchased{' '}
+              <time dateTime={purchasedAt}>{purchasedAt}</time>
+            </p>
+            <DownloadButton productId={product.id} />
+          </li>
+        ))}
+      </ul>
     </main>
   )
 }

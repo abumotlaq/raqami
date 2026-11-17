@@ -2,9 +2,8 @@ import { useEffect, useState } from 'react'
 import {
   getErrorMessage,
   getProducts as getProductsRequest,
-  type ProductsQuery,
 } from '../services/api'
-import type { Paginated, Product } from '../types/api'
+import type { Paginated, Product, ProductsQuery } from '../types/api'
 
 export type DataStatus = 'loading' | 'success' | 'error'
 

@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { ErrorState } from '../ui/ErrorState'
-import { ApiResponseError, getDownloadLink, getErrorMessage } from '../../services/api'
+import { getDownloadLink, getErrorMessage } from '../../services/api'
 import { useAuth } from '../../context/AuthContext'
 
 interface DownloadButtonProps {
@@ -30,15 +30,7 @@ export function DownloadButton({ productId }: DownloadButtonProps) {
     } catch (requestError: unknown) {
       downloadTab.close()
       const message = getErrorMessage(requestError)
-      const notPurchased =
-        requestError instanceof ApiResponseError &&
-        requestError.status === 403
-
-      setError(
-        notPurchased
-          ? `${message} This product has not been purchased.`
-          : message,
-      )
+      setError(message)
     } finally {
       setIsLoading(false)
     }

@@ -1,11 +1,23 @@
 import type {
+  AddCartItemRequestBody,
+  AdminOrder,
+  AdminProduct,
+  AdminProductCreateRequestBody,
+  AdminProductPatchRequestBody,
   ApiError,
   ApiErrorCode,
   AuthResponse,
+  Cart,
   DownloadLink,
+  FieldErrors,
+  LibraryResponse,
+  LoginRequestBody,
   Order,
   Paginated,
+  PaginationQuery,
   Product,
+  ProductsQuery,
+  RegisterRequestBody,
   User,
 } from '../types/api'
 
@@ -24,57 +36,62 @@ const apiErrorCodes = new Set<string>([
   'PAYMENT_FAILED',
   'PRODUCT_NOT_PURCHASED',
   'ADMIN_ONLY',
+  'UNAUTHENTICATED',
+  'PRODUCT_ALREADY_PURCHASED',
+  'ORDER_NOT_FOUND',
+  'FILE_NOT_AVAILABLE',
+  'DOWNLOAD_LINK_INVALID',
+  'NOT_FOUND',
+  'INVALID_REQUEST',
+  'INTERNAL_ERROR',
 ])
 
-declare const pendingContractBrand: unique symbol
+let unauthenticatedHandler: (() => void) | null = null
 
-export type PendingContract<Endpoint extends string> = {
-  readonly [pendingContractBrand]: Endpoint
-}
-
-export interface ProductsQuery {
-  search?: string
-  category?: string
-  page?: number
-  per_page?: number
-}
-
-// PENDING_CONTRACT: Appendix A does not define the register request body.
-export type RegisterRequestBody = PendingContract<'POST /auth/register body'>
-
-// PENDING_CONTRACT: Appendix A does not define the admin product request bodies.
-export type AdminProductRequestBody = PendingContract<
-  'POST /admin/products or PATCH /admin/products/{id} body'
->
-
-// PENDING_CONTRACT: Appendix A does not define the cart response item shape.
-export type PendingCartResponse = unknown
-
-// PENDING_CONTRACT: Appendix A does not define the library response item shape.
-export type PendingLibraryResponse = unknown
-
-export class ApiResponseError extends Error implements ApiError {
-  readonly code: ApiErrorCode
-
-  constructor(
-    code: ApiErrorCode,
-    message: string,
-    readonly status: number,
-  ) {
-    super(message)
-    this.name = 'ApiResponseError'
-    this.code = code
+export function setUnauthenticatedHandler(handler: () => void): () => void {
+  unauthenticatedHandler = handler
+  return () => {
+    if (unauthenticatedHandler === handler) {
+      unauthenticatedHandler = null
+    }
   }
 }
 
 interface RequestOptions {
   method?: 'GET' | 'POST' | 'DELETE' | 'PATCH'
   token?: string | null
-  body?: string
+  body?: string | FormData
+}
+
+export class ApiResponseError extends Error implements ApiError {
+  readonly code: ApiErrorCode
+  readonly errors: FieldErrors | null
+
+  constructor(
+    apiError: ApiError,
+    readonly status: number,
+  ) {
+    super(apiError.message)
+    this.name = 'ApiResponseError'
+    this.code = apiError.code
+    this.errors = apiError.errors
+  }
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
+}
+
+function isStringArray(value: unknown): value is string[] {
+  return Array.isArray(value) && value.every((item) => typeof item === 'string')
+}
+
+function parseFieldErrors(value: unknown): FieldErrors | null {
+  if (value === null || !isRecord(value)) return null
+
+  const entries = Object.entries(value)
+  if (!entries.every(([, messages]) => isStringArray(messages))) return null
+  return Object.fromEntries(entries) as FieldErrors
 }
 
 function isApiErrorCode(value: unknown): value is ApiErrorCode {
@@ -86,20 +103,21 @@ function parseErrorPayload(text: string): ApiError {
     try {
       const payload: unknown = JSON.parse(text)
       if (isRecord(payload) && typeof payload.message === 'string') {
-        const code = isApiErrorCode(payload.code)
-          ? payload.code
-          : 'VALIDATION_FAILED'
-
-        return { code, message: payload.message }
+        return {
+          code: isApiErrorCode(payload.code) ? payload.code : 'INTERNAL_ERROR',
+          message: payload.message,
+          errors: parseFieldErrors(payload.errors),
+        }
       }
     } catch {
-      // The response body is not JSON; return the documented generic fallback.
+      // The response body is not JSON; use a generic internal-error fallback.
     }
   }
 
   return {
-    code: 'VALIDATION_FAILED',
+    code: 'INTERNAL_ERROR',
     message: 'The server returned an unreadable error response.',
+    errors: null,
   }
 }
 
@@ -111,7 +129,7 @@ async function request<T>(
   if (options.token) {
     headers.set('Authorization', `Bearer ${options.token}`)
   }
-  if (options.body !== undefined) {
+  if (typeof options.body === 'string') {
     headers.set('Content-Type', 'application/json')
   }
 
@@ -124,7 +142,10 @@ async function request<T>(
 
   if (!response.ok) {
     const apiError = parseErrorPayload(responseText)
-    throw new ApiResponseError(apiError.code, apiError.message, response.status)
+    if (response.status === 401 && apiError.code === 'UNAUTHENTICATED') {
+      unauthenticatedHandler?.()
+    }
+    throw new ApiResponseError(apiError, response.status)
   }
 
   if (!responseText.trim()) {
@@ -138,22 +159,31 @@ async function request<T>(
   }
 }
 
+function queryString(params: PaginationQuery): string {
+  const query = new URLSearchParams()
+  if (params.page !== undefined) query.set('page', String(params.page))
+  if (params.per_page !== undefined) {
+    query.set('per_page', String(params.per_page))
+  }
+  return query.size > 0 ? `?${query.toString()}` : ''
+}
+
 export function getErrorMessage(error: unknown): string {
   return error instanceof Error ? error.message : 'An unexpected error occurred.'
 }
 
-export function register(
-  body: RegisterRequestBody,
-): Promise<AuthResponse> {
+export function register(body: RegisterRequestBody): Promise<AuthResponse> {
   return request<AuthResponse>('/auth/register', {
     method: 'POST',
     body: JSON.stringify(body),
   })
 }
 
-// PENDING_CONTRACT: Appendix A does not specify the login request body.
-export function login(): Promise<AuthResponse> {
-  return request<AuthResponse>('/auth/login', { method: 'POST' })
+export function login(body: LoginRequestBody): Promise<AuthResponse> {
+  return request<AuthResponse>('/auth/login', {
+    method: 'POST',
+    body: JSON.stringify(body),
+  })
 }
 
 export function logout(token?: string | null): Promise<void> {
@@ -174,28 +204,26 @@ export function getProducts(
   if (params.per_page !== undefined) {
     query.set('per_page', String(params.per_page))
   }
-
-  const search = query.size > 0 ? `?${query.toString()}` : ''
-  return request<Paginated<Product>>(`/products${search}`)
+  const suffix = query.size > 0 ? `?${query.toString()}` : ''
+  return request<Paginated<Product>>(`/products${suffix}`)
 }
 
 export function getProduct(id: string): Promise<Product> {
   return request<Product>(`/products/${encodeURIComponent(id)}`)
 }
 
-export function getCart(token?: string | null): Promise<PendingCartResponse> {
-  return request<PendingCartResponse>('/cart', { token })
+export function getCart(token?: string | null): Promise<Cart> {
+  return request<Cart>('/cart', { token })
 }
 
-// PENDING_CONTRACT: Appendix A does not define the cart item response body.
 export function addCartItem(
-  productId: string,
+  body: AddCartItemRequestBody,
   token?: string | null,
-): Promise<unknown> {
-  return request<unknown>('/cart/items', {
+): Promise<Cart> {
+  return request<Cart>('/cart/items', {
     method: 'POST',
     token,
-    body: JSON.stringify({ productId }),
+    body: JSON.stringify(body),
   })
 }
 
@@ -209,16 +237,15 @@ export function removeCartItem(
   })
 }
 
-// PENDING_CONTRACT: Appendix A does not define the create order response body.
-export function createOrder(token?: string | null): Promise<unknown> {
-  return request<unknown>('/orders', { method: 'POST', token })
+export function createOrder(token?: string | null): Promise<Order> {
+  return request<Order>('/orders', { method: 'POST', token })
 }
 
-// PENDING_CONTRACT: Appendix A does not state whether order list items include items.
 export function getOrders(
+  params: PaginationQuery = {},
   token?: string | null,
-): Promise<Paginated<unknown>> {
-  return request<Paginated<unknown>>('/orders', { token })
+): Promise<Paginated<Order>> {
+  return request<Paginated<Order>>(`/orders${queryString(params)}`, { token })
 }
 
 export function getOrder(
@@ -228,10 +255,8 @@ export function getOrder(
   return request<Order>(`/orders/${encodeURIComponent(id)}`, { token })
 }
 
-export function getLibrary(
-  token?: string | null,
-): Promise<PendingLibraryResponse> {
-  return request<PendingLibraryResponse>('/library', { token })
+export function getLibrary(token?: string | null): Promise<LibraryResponse> {
+  return request<LibraryResponse>('/library', { token })
 }
 
 export function getDownloadLink(
@@ -244,37 +269,57 @@ export function getDownloadLink(
   )
 }
 
-// PENDING_CONTRACT: Appendix A does not define the admin product list response shape.
-export function getAdminProducts(token?: string | null): Promise<unknown> {
-  return request<unknown>('/admin/products', { token })
+export function getAdminProducts(
+  params: PaginationQuery = {},
+  token?: string | null,
+): Promise<Paginated<AdminProduct>> {
+  return request<Paginated<AdminProduct>>(
+    `/admin/products${queryString(params)}`,
+    { token },
+  )
 }
 
-// PENDING_CONTRACT: Appendix A does not define the create response body.
 export function createAdminProduct(
-  body: AdminProductRequestBody,
+  body: AdminProductCreateRequestBody,
   token?: string | null,
-): Promise<unknown> {
-  return request<unknown>('/admin/products', {
+): Promise<AdminProduct> {
+  return request<AdminProduct>('/admin/products', {
     method: 'POST',
     token,
     body: JSON.stringify(body),
   })
 }
 
-// PENDING_CONTRACT: Appendix A does not define the update response body.
 export function updateAdminProduct(
   id: string,
-  body: AdminProductRequestBody,
+  body: AdminProductPatchRequestBody,
   token?: string | null,
-): Promise<unknown> {
-  return request<unknown>(`/admin/products/${encodeURIComponent(id)}`, {
+): Promise<AdminProduct> {
+  return request<AdminProduct>(`/admin/products/${encodeURIComponent(id)}`, {
     method: 'PATCH',
     token,
     body: JSON.stringify(body),
   })
 }
 
-// PENDING_CONTRACT: Appendix A does not specify pagination or order item fields here.
-export function getAdminOrders(token?: string | null): Promise<unknown> {
-  return request<unknown>('/admin/orders', { token })
+export function uploadAdminProductFile(
+  id: string,
+  file: File,
+  token?: string | null,
+): Promise<AdminProduct> {
+  const body = new FormData()
+  body.append('file', file)
+  return request<AdminProduct>(
+    `/admin/products/${encodeURIComponent(id)}/file`,
+    { method: 'POST', token, body },
+  )
+}
+
+export function getAdminOrders(
+  params: PaginationQuery = {},
+  token?: string | null,
+): Promise<Paginated<AdminOrder>> {
+  return request<Paginated<AdminOrder>>(`/admin/orders${queryString(params)}`, {
+    token,
+  })
 }

@@ -6,13 +6,21 @@ import {
   useReducer,
   type ReactNode,
 } from 'react'
+import { useLocation, useNavigate } from 'react-router-dom'
 import {
   ApiResponseError,
   getCurrentUser,
   login as loginRequest,
   logout as logoutRequest,
+  register as registerRequest,
+  setUnauthenticatedHandler,
 } from '../services/api'
-import type { User } from '../types/api'
+import type {
+  AuthResponse,
+  LoginRequestBody,
+  RegisterRequestBody,
+  User,
+} from '../types/api'
 
 const TOKEN_STORAGE_KEY = 'raqami_token'
 
@@ -33,7 +41,8 @@ type AuthAction =
   | { type: 'anonymous' }
 
 interface AuthContextValue extends AuthState {
-  login: () => Promise<void>
+  login: (body: LoginRequestBody) => Promise<void>
+  register: (body: RegisterRequestBody) => Promise<void>
   logout: () => Promise<void>
 }
 
@@ -67,6 +76,27 @@ interface AuthProviderProps {
 
 export function AuthProvider({ children }: AuthProviderProps) {
   const [state, dispatch] = useReducer(authReducer, initialState)
+  const navigate = useNavigate()
+  const location = useLocation()
+
+  useEffect(
+    () =>
+      setUnauthenticatedHandler(() => {
+        window.localStorage.removeItem(TOKEN_STORAGE_KEY)
+        dispatch({ type: 'anonymous' })
+        const from = `${location.pathname}${location.search}${location.hash}`
+        navigate('/login', {
+          replace: true,
+          state: {
+            from:
+              location.pathname === '/login' || location.pathname === '/register'
+                ? '/'
+                : from,
+          },
+        })
+      }),
+    [location.hash, location.pathname, location.search, navigate],
+  )
 
   useEffect(() => {
     let active = true
@@ -98,7 +128,11 @@ export function AuthProvider({ children }: AuthProviderProps) {
       .catch((error: unknown) => {
         if (!active) return
 
-        if (error instanceof ApiResponseError && error.status === 401) {
+        if (
+          error instanceof ApiResponseError &&
+          error.status === 401 &&
+          error.code === 'UNAUTHENTICATED'
+        ) {
           try {
             window.localStorage.removeItem(TOKEN_STORAGE_KEY)
           } finally {
@@ -115,21 +149,34 @@ export function AuthProvider({ children }: AuthProviderProps) {
     }
   }, [])
 
-  const login = useCallback(async () => {
-    dispatch({ type: 'login-started' })
-    try {
-      const response = await loginRequest()
-      window.localStorage.setItem(TOKEN_STORAGE_KEY, response.token)
-      dispatch({
-        type: 'authenticated',
-        user: response.user,
-        token: response.token,
-      })
-    } catch (error) {
-      dispatch({ type: 'anonymous' })
-      throw error
-    }
-  }, [])
+  const authenticate = useCallback(
+    async (requestAuth: () => Promise<AuthResponse>) => {
+      dispatch({ type: 'login-started' })
+      try {
+        const response = await requestAuth()
+        window.localStorage.setItem(TOKEN_STORAGE_KEY, response.token)
+        dispatch({
+          type: 'authenticated',
+          user: response.user,
+          token: response.token,
+        })
+      } catch (error) {
+        dispatch({ type: 'anonymous' })
+        throw error
+      }
+    },
+    [],
+  )
+
+  const login = useCallback(
+    (body: LoginRequestBody) => authenticate(() => loginRequest(body)),
+    [authenticate],
+  )
+
+  const register = useCallback(
+    (body: RegisterRequestBody) => authenticate(() => registerRequest(body)),
+    [authenticate],
+  )
 
   const logout = useCallback(async () => {
     try {
@@ -144,7 +191,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
   }, [state.token])
 
   return (
-    <AuthContext.Provider value={{ ...state, login, logout }}>
+    <AuthContext.Provider value={{ ...state, login, register, logout }}>
       {children}
     </AuthContext.Provider>
   )

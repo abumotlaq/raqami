@@ -1,36 +1,23 @@
-import { useCallback } from 'react'
+import { useCallback, useState } from 'react'
 import { EmptyState } from '../components/ui/EmptyState'
 import { ErrorState } from '../components/ui/ErrorState'
+import { Pagination } from '../components/ui/Pagination'
 import { Spinner } from '../components/ui/Spinner'
 import { useAuth } from '../context/AuthContext'
 import { useApiResource } from '../hooks/useApiResource'
 import { getOrders } from '../services/api'
-import type { Order, OrderStatus, Paginated } from '../types/api'
-
-type OrderSummary = Pick<Order, 'id' | 'status' | 'total' | 'createdAt'>
-
-function isOrderStatus(value: unknown): value is OrderStatus {
-  return value === 'pending' || value === 'paid' || value === 'failed'
-}
-
-function isOrderSummary(value: unknown): value is OrderSummary {
-  if (typeof value !== 'object' || value === null || Array.isArray(value)) {
-    return false
-  }
-  const record = value as Record<string, unknown>
-  return (
-    typeof record.id === 'string' &&
-    isOrderStatus(record.status) &&
-    typeof record.total === 'string' &&
-    typeof record.createdAt === 'string'
-  )
-}
+import type { Order, Paginated } from '../types/api'
 
 export function OrdersPage() {
   const { token } = useAuth()
-  const loadOrders = useCallback(() => getOrders(token), [token])
+  const [page, setPage] = useState(1)
+  const [perPage, setPerPage] = useState(12)
+  const loadOrders = useCallback(
+    () => getOrders({ page, per_page: perPage }, token),
+    [page, perPage, token],
+  )
   const { data, status, error, retry } =
-    useApiResource<Paginated<unknown>>(loadOrders)
+    useApiResource<Paginated<Order>>(loadOrders)
 
   if (status === 'loading') {
     return <Spinner />
@@ -43,34 +30,56 @@ export function OrdersPage() {
       />
     )
   }
-
   if (!data || data.data.length === 0) {
-    return <EmptyState title="No orders are available." />
-  }
-
-  const orders = data.data.filter(isOrderSummary)
-  if (orders.length !== data.data.length) {
     return (
-      <ErrorState
-        message="The server returned an order without all confirmed fields."
-        onRetry={retry}
-      />
+      <main className="space-y-md p-md">
+        <h1 className="text-heading">Orders</h1>
+        <EmptyState title="No orders are available." />
+        {data ? (
+          <Pagination
+            meta={data.meta}
+            onPageChange={setPage}
+            onPerPageChange={(value) => {
+              setPerPage(value)
+              setPage(1)
+            }}
+          />
+        ) : null}
+      </main>
     )
   }
 
   return (
-    <main>
-      <h1>Orders</h1>
-      <ul>
-        {orders.map((order) => (
-          <li key={order.id}>
-            <p>{order.id}</p>
-            <p>{order.status}</p>
-            <p>{Number(order.total).toFixed(2)}</p>
+    <main className="space-y-md p-md">
+      <h1 className="text-heading">Orders</h1>
+      <ul className="grid gap-md">
+        {data.data.map((order) => (
+          <li
+            className="space-y-sm rounded-card border border-border bg-surface p-md"
+            key={order.id}
+          >
+            <h2 className="text-subheading">Order {order.id}</h2>
+            <p>Status: {order.status}</p>
+            <p>Total: {Number(order.total).toFixed(2)}</p>
             <time dateTime={order.createdAt}>{order.createdAt}</time>
+            <ul className="grid gap-sm">
+              {order.items.map((item) => (
+                <li key={item.productId}>
+                  {item.title} — {Number(item.unitPrice).toFixed(2)}
+                </li>
+              ))}
+            </ul>
           </li>
         ))}
       </ul>
+      <Pagination
+        meta={data.meta}
+        onPageChange={setPage}
+        onPerPageChange={(value) => {
+          setPerPage(value)
+          setPage(1)
+        }}
+      />
     </main>
   )
 }
