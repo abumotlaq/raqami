@@ -7,17 +7,17 @@ It implements the API contract in Appendix A of the project report.
 
 ```bash
 cp .env.example .env        # then set JWT_SECRET to a long random value
-docker compose up -d        # PostgreSQL (and pgAdmin on :5050)
+docker compose up -d db     # PostgreSQL only (pgAdmin on :5050 is optional)
 pnpm install
 pnpm db:migrate             # create the tables
-pnpm db:seed                # admin account + 15 sample products
+pnpm db:seed                # development only: admin account + 15 sample products
 pnpm dev                    # http://localhost:3000
 ```
 
 The seed creates the admin from `ADMIN_EMAIL` / `ADMIN_PASSWORD` in `.env`.
 Accounts created through `/auth/register` are always customers.
 
-For the frontend, set `VITE_API_URL=http://localhost:3000/api/v1` in `client/.env`.
+For the frontend, set `VITE_API_URL=http://localhost:3000/api/v1` in `client/.env.local` (not `.env`).
 
 ## API documentation (Swagger)
 
